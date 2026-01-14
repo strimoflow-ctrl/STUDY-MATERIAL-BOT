@@ -1,0 +1,7 @@
+flask
+python-telegram-bot
+pymongo
+certifi
+python-dotenv
+gunicorn
+requests
