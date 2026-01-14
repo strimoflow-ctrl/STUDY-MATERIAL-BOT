@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot File Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #121212; color: #e0e0e0; }
+        .card { background-color: #1e1e1e; border: 1px solid #333; }
+        .list-group-item { background-color: #1e1e1e; color: #fff; border-bottom: 1px solid #333; }
+        .list-group-item:hover { background-color: #2c2c2c; }
+        .btn-primary { background-color: #0088cc; border: none; }
+        .folder-icon { color: #f1c40f; margin-right: 10px; }
+        .file-icon { color: #3498db; margin-right: 10px; }
+        .breadcrumb-item a { color: #0088cc; text-decoration: none; }
+    </style>
+</head>
+<body class="p-4">
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>📚 Study Bot Manager</h3>
+        <button class="btn btn-outline-danger btn-sm" onclick="logout()">Logout</button>
+    </div>
+
+    <!-- Controls -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb" id="breadcrumbs">
+                    <li class="breadcrumb-item"><a href="#" onclick="loadNodes('root', 'Home')">Home</a></li>
+                </ol>
+            </nav>
+        </div>
+        <div class="col-md-6 text-end">
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#folderModal"><i class="fas fa-folder-plus"></i> New Folder</button>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#fileModal"><i class="fas fa-file-upload"></i> Add File</button>
+        </div>
+    </div>
+
+    <!-- List -->
+    <div class="card">
+        <ul class="list-group list-group-flush" id="fileList">
+            <!-- Items will load here -->
+            <li class="list-group-item text-center">Loading...</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Create Folder Modal -->
+<div class="modal fade" id="folderModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title">Create Folder</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="folderName" class="form-control bg-dark text-white mb-2" placeholder="Folder Name (e.g., Physics)">
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-primary" onclick="createNode('folder')">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add File Modal -->
+<div class="modal fade" id="fileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title">Add PDF/File</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="fileName" class="form-control bg-dark text-white mb-2" placeholder="Display Name (e.g., Chapter 1 Notes)">
+                <input type="text" id="fileId" class="form-control bg-dark text-white" placeholder="Paste Telegram File ID Here">
+                <small class="text-muted">Forward a file to your bot to get File ID.</small>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-primary" onclick="createNode('file')">Add File</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const PASS = urlParams.get('pass');
+    let currentParentId = 'root';
+    let pathHistory = [{id: 'root', name: 'Home'}];
+
+    if(!PASS) { document.body.innerHTML = "<h2 class='text-center text-danger mt-5'>Auth Failed</h2>"; }
+
+    // Load Data
+    async function loadNodes(parentId, name = null) {
+        currentParentId = parentId;
+        
+        // Update Breadcrumbs
+        if(name) {
+            // Check if going back
+            const index = pathHistory.findIndex(p => p.id === parentId);
+            if(index !== -1) {
+                pathHistory = pathHistory.slice(0, index + 1);
+            } else {
+                pathHistory.push({id: parentId, name: name});
+            }
+        }
+        renderBreadcrumbs();
+
+        const res = await fetch(`/api/get_nodes?pass=${PASS}&parent_id=${parentId}`);
+        const data = await res.json();
+        
+        const list = document.getElementById('fileList');
+        list.innerHTML = "";
+        
+        if(data.length === 0) {
+            list.innerHTML = `<li class="list-group-item text-center text-muted">Empty Folder</li>`;
+            return;
+        }
+
+        data.forEach(item => {
+            const icon = item.type === 'folder' ? '<i class="fas fa-folder folder-icon"></i>' : '<i class="fas fa-file-pdf file-icon"></i>';
+            const clickAction = item.type === 'folder' ? `onclick="loadNodes('${item._id}', '${item.name}')"` : '';
+            
+            list.innerHTML += `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div style="cursor: pointer; flex-grow: 1;" ${clickAction}>
+                        ${icon} ${item.name}
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteNode('${item._id}')"><i class="fas fa-trash"></i></button>
+                </li>
+            `;
+        });
+    }
+
+    function renderBreadcrumbs() {
+        const bc = document.getElementById('breadcrumbs');
+        bc.innerHTML = pathHistory.map(p => 
+            `<li class="breadcrumb-item"><a href="#" onclick="loadNodes('${p.id}', '${p.name}')">${p.name}</a></li>`
+        ).join('');
+    }
+
+    // Create Logic
+    async function createNode(type) {
+        const name = type === 'folder' ? document.getElementById('folderName').value : document.getElementById('fileName').value;
+        const fileId = type === 'file' ? document.getElementById('fileId').value : null;
+
+        if(!name) return alert("Name required");
+        if(type === 'file' && !fileId) return alert("File ID required");
+
+        await fetch('/api/create_node', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ pass: PASS, name, type, file_id: fileId, parent_id: currentParentId })
+        });
+        
+        // Reset and Reload
+        document.getElementById('folderName').value = "";
+        document.getElementById('fileName').value = "";
+        document.getElementById('fileId').value = "";
+        
+        const modalEl = document.getElementById(type === 'folder' ? 'folderModal' : 'fileModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
+        
+        loadNodes(currentParentId);
+    }
+
+    // Delete Logic
+    async function deleteNode(id) {
+        if(!confirm("Are you sure? This will delete everything inside it.")) return;
+        await fetch('/api/delete_node', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ pass: PASS, id: id })
+        });
+        loadNodes(currentParentId);
+    }
+
+    function logout() { window.location.href = "/"; }
+
+    // Init
+    loadNodes('root');
+</script>
+</body>
+</html>
